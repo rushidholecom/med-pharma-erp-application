@@ -1,0 +1,128 @@
+## Docker Deployment Guide
+
+### Prerequisites
+
+- Docker 24+
+- Docker Compose plugin
+- 8 GB RAM recommended for running MongoDB, 10 Java services, and the frontend together
+- Local ports `3000`, `27017`, and `8081` through `8090` available
+
+### Step 1 - Review Docker Assets
+
+This repository already includes the Docker deployment files:
+
+- `docker/backend.Dockerfile`
+- `docker/frontend.Dockerfile`
+- `docker/nginx.conf`
+- `docker-compose.yml`
+
+### Step 2 - Build the Full Stack
+
+```bash
+docker compose build
+```
+
+If you want a clean rebuild without old layers:
+
+```bash
+docker compose build --no-cache
+```
+
+### Step 3 - Start All Containers
+
+```bash
+docker compose up -d
+```
+
+Verify container status:
+
+```bash
+docker compose ps
+```
+
+### Step 4 - Verify the Deployment
+
+Check the frontend:
+
+```bash
+curl http://localhost:3000
+```
+
+Check a few service health endpoints:
+
+```bash
+curl http://localhost:8081/actuator/health
+curl http://localhost:8084/actuator/health
+curl http://localhost:8090/actuator/health
+```
+
+Open the application in your browser:
+
+```text
+http://localhost:3000
+```
+
+### Step 5 - View Logs
+
+```bash
+docker compose logs -f frontend
+docker compose logs -f auth-service
+docker compose logs -f inventory-service
+docker compose logs -f mongodb
+```
+
+### Step 6 - Stop, Restart, or Rebuild
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Stop and remove MongoDB data volume too:
+
+```bash
+docker compose down -v
+```
+
+Rebuild one service and restart it:
+
+```bash
+docker compose build auth-service
+docker compose up -d auth-service
+```
+
+Restart the whole stack:
+
+```bash
+docker compose restart
+```
+
+### Useful Docker Commands
+
+```bash
+# Container status
+docker compose ps
+
+# Follow all logs
+docker compose logs -f
+
+# Follow one service log
+docker compose logs -f finance-billing-service
+
+# Open shell inside a running container
+docker compose exec auth-service sh
+
+# Resource usage
+docker stats
+```
+
+### Docker Troubleshooting
+
+| Issue | Debug Command |
+| --- | --- |
+| Container exits immediately | `docker compose logs <service-name>` |
+| Port already in use | `docker compose ps` and check local processes on `3000`, `27017`, `8081-8090` |
+| MongoDB not reachable | `docker compose logs mongodb` |
+| Frontend loads but API cards fail | `curl http://localhost:8081/actuator/health` and `docker compose logs frontend` |
+| Fresh reset needed | `docker compose down -v && docker compose up -d --build` |
