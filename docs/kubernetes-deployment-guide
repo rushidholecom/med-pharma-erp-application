@@ -1,0 +1,562 @@
+# Kubernetes / EKS Manual Deployment Guide
+
+This guide is intentionally written for manual deployment by a DevOps engineer.
+
+- No bash deployment scripts
+- No helper automation
+- No loop-based bulk rollout commands
+- Explicit per-service image, rollout, and verification steps
+
+This repository currently provides the application code and container build files. Production Kubernetes manifests should be maintained in your infrastructure or GitOps repository. This document tells you exactly what values to use and what to change during deployment.
+
+## Deployment Scope
+
+The platform contains these Kubernetes workloads:
+
+| Workload | Container Port | Public/Private |
+| --- | --- | --- |
+| `auth-service` | `8081` | Private |
+| `employee-service` | `8082` | Private |
+| `medicine-catalog-service` | `8083` | Private |
+| `inventory-service` | `8084` | Private |
+| `procurement-service` | `8085` | Private |
+| `sales-distribution-service` | `8086` | Private |
+| `production-batch-service` | `8087` | Private |
+| `quality-control-service` | `8088` | Private |
+| `warehouse-logistics-service` | `8089` | Private |
+| `finance-billing-service` | `8090` | Private |
+| `frontend` | `80` | Public |
+
+## Prerequisites
+
+- `kubectl` 1.28+
+- `helm` 3.x
+- Docker
+- AWS CLI configured with EKS and ECR access
+- Running EKS cluster
+- TLS certificate in ACM if using HTTPS ingress
+- MongoDB Atlas or another production-grade MongoDB service
+- Separate Kubernetes manifests managed by your DevOps or platform repository
+
+## Application Values You Must Use
+
+Use these internal service base URLs inside Kubernetes:
+
+| Config Key | Value |
+| --- | --- |
+| `AUTH_SERVICE_URL` | `http://auth-service:8081/api/v1` |
+| `EMPLOYEE_SERVICE_URL` | `http://employee-service:8082/api/v1` |
+| `CATALOG_SERVICE_URL` | `http://medicine-catalog-service:8083/api/v1` |
+| `INVENTORY_SERVICE_URL` | `http://inventory-service:8084/api/v1` |
+| `PROCUREMENT_SERVICE_URL` | `http://procurement-service:8085/api/v1` |
+| `SALES_SERVICE_URL` | `http://sales-distribution-service:8086/api/v1` |
+| `PRODUCTION_SERVICE_URL` | `http://production-batch-service:8087/api/v1` |
+| `QUALITY_SERVICE_URL` | `http://quality-control-service:8088/api/v1` |
+| `WAREHOUSE_SERVICE_URL` | `http://warehouse-logistics-service:8089/api/v1` |
+| `FINANCE_SERVICE_URL` | `http://finance-billing-service:8090/api/v1` |
+
+Use these health endpoints in probes:
+
+| Workload | Health Endpoint |
+| --- | --- |
+| All backend services | `/api/v1/actuator/health` |
+| Frontend | `/` |
+
+Use these summary endpoints for validation:
+
+| Workload | API Check |
+| --- | --- |
+| `auth-service` | `/api/v1/auth/summary` |
+| `employee-service` | `/api/v1/employees/summary` |
+| `medicine-catalog-service` | `/api/v1/catalog/summary` |
+| `inventory-service` | `/api/v1/inventory/summary` |
+| `procurement-service` | `/api/v1/procurement/summary` |
+| `sales-distribution-service` | `/api/v1/sales/summary` |
+| `production-batch-service` | `/api/v1/production/summary` |
+| `quality-control-service` | `/api/v1/quality/summary` |
+| `warehouse-logistics-service` | `/api/v1/warehouse/summary` |
+| `finance-billing-service` | `/api/v1/finance/summary` |
+
+## Step 1 - Configure kubectl for EKS
+
+```bash
+aws eks update-kubeconfig \
+  --region us-east-1 \
+  --name pharma-erp-prod-eks
+```
+
+Verify connectivity:
+
+```bash
+kubectl get nodes
+kubectl get ns
+```
+
+## Step 2 - Login to Amazon ECR
+
+Replace the placeholders before running:
+
+- `123456789012` with your AWS account ID
+- `us-east-1` with your AWS region
+
+```bash
+aws ecr get-login-password --region us-east-1 | docker login \
+  --username AWS \
+  --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+```
+
+## Step 3 - Ensure ECR Repositories Exist
+
+Create each repository manually if it does not already exist:
+
+```bash
+aws ecr create-repository --repository-name pharma-erp-auth-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-employee-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-medicine-catalog-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-inventory-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-procurement-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-sales-distribution-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-production-batch-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-quality-control-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-warehouse-logistics-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-finance-billing-service --region us-east-1
+aws ecr create-repository --repository-name pharma-erp-frontend --region us-east-1
+```
+
+If a repository already exists, AWS will return a conflict message. That is safe and expected.
+
+## Step 4 - Build Backend Images Manually
+
+Use your actual registry and release tag. Example tag: `v1.0.0`
+
+```bash
+docker build --build-arg SERVICE_DIR=auth-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-auth-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=employee-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-employee-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=medicine-catalog-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-medicine-catalog-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=inventory-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-inventory-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=procurement-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-procurement-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=sales-distribution-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-sales-distribution-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=production-batch-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-production-batch-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=quality-control-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-quality-control-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=warehouse-logistics-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-warehouse-logistics-service:v1.0.0 .
+docker build --build-arg SERVICE_DIR=finance-billing-service -f docker/backend.Dockerfile -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-finance-billing-service:v1.0.0 .
+```
+
+## Step 5 - Push Backend Images Manually
+
+```bash
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-auth-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-employee-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-medicine-catalog-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-inventory-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-procurement-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-sales-distribution-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-production-batch-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-quality-control-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-warehouse-logistics-service:v1.0.0
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-finance-billing-service:v1.0.0
+```
+
+## Step 6 - Build and Push the Frontend Image Manually
+
+```bash
+docker build \
+  --build-arg VITE_AUTH_SERVICE_URL=/proxy/auth-service \
+  --build-arg VITE_EMPLOYEE_SERVICE_URL=/proxy/employee-service \
+  --build-arg VITE_CATALOG_SERVICE_URL=/proxy/medicine-catalog-service \
+  --build-arg VITE_INVENTORY_SERVICE_URL=/proxy/inventory-service \
+  --build-arg VITE_PROCUREMENT_SERVICE_URL=/proxy/procurement-service \
+  --build-arg VITE_SALES_SERVICE_URL=/proxy/sales-distribution-service \
+  --build-arg VITE_PRODUCTION_SERVICE_URL=/proxy/production-batch-service \
+  --build-arg VITE_QUALITY_SERVICE_URL=/proxy/quality-control-service \
+  --build-arg VITE_WAREHOUSE_SERVICE_URL=/proxy/warehouse-logistics-service \
+  --build-arg VITE_FINANCE_SERVICE_URL=/proxy/finance-billing-service \
+  -f docker/frontend.Dockerfile \
+  -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-frontend:v1.0.0 .
+
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-frontend:v1.0.0
+```
+
+## Step 7 - Create the Kubernetes Namespace
+
+```bash
+kubectl create namespace pharma-erp
+```
+
+Verify:
+
+```bash
+kubectl get namespace pharma-erp
+```
+
+## Step 8 - Create the Application Secret Manually
+
+Use real production values. Do not commit these values to Git.
+
+Example:
+
+```bash
+kubectl create secret generic pharma-erp-app-secrets \
+  -n pharma-erp \
+  --from-literal=JWT_SECRET=replace-with-256-bit-secret \
+  --from-literal=AUTH_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_auth_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=EMPLOYEE_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_employee_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=CATALOG_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_catalog_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=INVENTORY_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_inventory_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=PROCUREMENT_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_procurement_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=SALES_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_sales_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=PRODUCTION_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_production_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=QUALITY_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_quality_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=WAREHOUSE_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_warehouse_db?retryWrites=true&w=majority&appName=PharmaERP" \
+  --from-literal=FINANCE_MONGODB_URI="mongodb+srv://username:password@cluster.mongodb.net/pharma_finance_db?retryWrites=true&w=majority&appName=PharmaERP"
+```
+
+Verify:
+
+```bash
+kubectl get secret pharma-erp-app-secrets -n pharma-erp
+```
+
+## Step 9 - Create the Service URL ConfigMap Manually
+
+```bash
+kubectl create configmap pharma-erp-service-config \
+  -n pharma-erp \
+  --from-literal=CORS_ALLOWED_ORIGINS=https://erp.example.com \
+  --from-literal=AUTH_SERVICE_URL=http://auth-service:8081/api/v1 \
+  --from-literal=EMPLOYEE_SERVICE_URL=http://employee-service:8082/api/v1 \
+  --from-literal=CATALOG_SERVICE_URL=http://medicine-catalog-service:8083/api/v1 \
+  --from-literal=INVENTORY_SERVICE_URL=http://inventory-service:8084/api/v1 \
+  --from-literal=PROCUREMENT_SERVICE_URL=http://procurement-service:8085/api/v1 \
+  --from-literal=SALES_SERVICE_URL=http://sales-distribution-service:8086/api/v1 \
+  --from-literal=PRODUCTION_SERVICE_URL=http://production-batch-service:8087/api/v1 \
+  --from-literal=QUALITY_SERVICE_URL=http://quality-control-service:8088/api/v1 \
+  --from-literal=WAREHOUSE_SERVICE_URL=http://warehouse-logistics-service:8089/api/v1 \
+  --from-literal=FINANCE_SERVICE_URL=http://finance-billing-service:8090/api/v1
+```
+
+Verify:
+
+```bash
+kubectl get configmap pharma-erp-service-config -n pharma-erp
+```
+
+## Step 10 - Update Each Deployment Manifest Manually
+
+Your DevOps repository should contain one Deployment and one Service manifest for each workload.
+
+Each backend Deployment should contain these values:
+
+| Field | Required Value |
+| --- | --- |
+| `metadata.namespace` | `pharma-erp` |
+| container image | your ECR image for that service |
+| container port | service port from the table above |
+| readiness probe path | `/api/v1/actuator/health` |
+| liveness probe path | `/api/v1/actuator/health` |
+| env from Secret | `pharma-erp-app-secrets` |
+| env from ConfigMap | `pharma-erp-service-config` |
+
+Each frontend Deployment should contain these values:
+
+| Field | Required Value |
+| --- | --- |
+| `metadata.namespace` | `pharma-erp` |
+| container image | `pharma-erp-frontend` image from ECR |
+| container port | `80` |
+| readiness probe path | `/` |
+| liveness probe path | `/` |
+
+Each Service manifest should use these ports:
+
+| Service | Service Port | Target Port |
+| --- | --- | --- |
+| `auth-service` | `8081` | `8081` |
+| `employee-service` | `8082` | `8082` |
+| `medicine-catalog-service` | `8083` | `8083` |
+| `inventory-service` | `8084` | `8084` |
+| `procurement-service` | `8085` | `8085` |
+| `sales-distribution-service` | `8086` | `8086` |
+| `production-batch-service` | `8087` | `8087` |
+| `quality-control-service` | `8088` | `8088` |
+| `warehouse-logistics-service` | `8089` | `8089` |
+| `finance-billing-service` | `8090` | `8090` |
+| `frontend` | `80` | `80` |
+
+## Step 11 - Apply Kubernetes Manifests Manually
+
+Apply each workload one by one from your infrastructure repository:
+
+```bash
+kubectl apply -f namespace.yaml
+kubectl apply -f configmap.yaml
+kubectl apply -f secret.yaml
+kubectl apply -f auth-service-deployment.yaml
+kubectl apply -f auth-service-service.yaml
+kubectl apply -f employee-service-deployment.yaml
+kubectl apply -f employee-service-service.yaml
+kubectl apply -f medicine-catalog-service-deployment.yaml
+kubectl apply -f medicine-catalog-service-service.yaml
+kubectl apply -f inventory-service-deployment.yaml
+kubectl apply -f inventory-service-service.yaml
+kubectl apply -f procurement-service-deployment.yaml
+kubectl apply -f procurement-service-service.yaml
+kubectl apply -f sales-distribution-service-deployment.yaml
+kubectl apply -f sales-distribution-service-service.yaml
+kubectl apply -f production-batch-service-deployment.yaml
+kubectl apply -f production-batch-service-service.yaml
+kubectl apply -f quality-control-service-deployment.yaml
+kubectl apply -f quality-control-service-service.yaml
+kubectl apply -f warehouse-logistics-service-deployment.yaml
+kubectl apply -f warehouse-logistics-service-service.yaml
+kubectl apply -f finance-billing-service-deployment.yaml
+kubectl apply -f finance-billing-service-service.yaml
+kubectl apply -f frontend-deployment.yaml
+kubectl apply -f frontend-service.yaml
+kubectl apply -f ingress.yaml
+```
+
+The filenames above are examples. Use the actual filenames from your DevOps repository.
+
+## Step 12 - Install AWS Load Balancer Controller
+
+If your EKS cluster exposes the frontend through ALB ingress, install the controller manually:
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=pharma-erp-prod-eks \
+  --set serviceAccount.create=true \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::123456789012:role/AWSLoadBalancerControllerIAMRole
+```
+
+Verify:
+
+```bash
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+```
+
+## Step 13 - Verify All Pods Manually
+
+```bash
+kubectl get pods -n pharma-erp
+kubectl get svc -n pharma-erp
+kubectl get ingress -n pharma-erp
+```
+
+Check each rollout individually:
+
+```bash
+kubectl rollout status deployment/auth-service -n pharma-erp
+kubectl rollout status deployment/employee-service -n pharma-erp
+kubectl rollout status deployment/medicine-catalog-service -n pharma-erp
+kubectl rollout status deployment/inventory-service -n pharma-erp
+kubectl rollout status deployment/procurement-service -n pharma-erp
+kubectl rollout status deployment/sales-distribution-service -n pharma-erp
+kubectl rollout status deployment/production-batch-service -n pharma-erp
+kubectl rollout status deployment/quality-control-service -n pharma-erp
+kubectl rollout status deployment/warehouse-logistics-service -n pharma-erp
+kubectl rollout status deployment/finance-billing-service -n pharma-erp
+kubectl rollout status deployment/frontend -n pharma-erp
+```
+
+## Step 14 - Validate Application Endpoints Manually
+
+Port-forward the frontend:
+
+```bash
+kubectl port-forward svc/frontend 3000:80 -n pharma-erp
+```
+
+In another terminal, check:
+
+```bash
+curl http://localhost:3000
+```
+
+Port-forward one backend service at a time for verification:
+
+```bash
+kubectl port-forward svc/auth-service 8081:8081 -n pharma-erp
+kubectl port-forward svc/inventory-service 8084:8084 -n pharma-erp
+kubectl port-forward svc/finance-billing-service 8090:8090 -n pharma-erp
+```
+
+Then verify:
+
+```bash
+curl http://localhost:8081/api/v1/actuator/health
+curl http://localhost:8081/api/v1/auth/summary
+
+curl http://localhost:8084/api/v1/actuator/health
+curl http://localhost:8084/api/v1/inventory/summary
+
+curl http://localhost:8090/api/v1/actuator/health
+curl http://localhost:8090/api/v1/finance/summary
+```
+
+## Step 15 - Manual Rolling Update Commands
+
+When a new version is released, update each deployment manually.
+
+Auth:
+
+```bash
+kubectl set image deployment/auth-service \
+  auth-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-auth-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Employee:
+
+```bash
+kubectl set image deployment/employee-service \
+  employee-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-employee-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Medicine Catalog:
+
+```bash
+kubectl set image deployment/medicine-catalog-service \
+  medicine-catalog-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-medicine-catalog-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Inventory:
+
+```bash
+kubectl set image deployment/inventory-service \
+  inventory-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-inventory-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Procurement:
+
+```bash
+kubectl set image deployment/procurement-service \
+  procurement-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-procurement-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Sales:
+
+```bash
+kubectl set image deployment/sales-distribution-service \
+  sales-distribution-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-sales-distribution-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Production:
+
+```bash
+kubectl set image deployment/production-batch-service \
+  production-batch-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-production-batch-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Quality:
+
+```bash
+kubectl set image deployment/quality-control-service \
+  quality-control-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-quality-control-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Warehouse:
+
+```bash
+kubectl set image deployment/warehouse-logistics-service \
+  warehouse-logistics-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-warehouse-logistics-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Finance:
+
+```bash
+kubectl set image deployment/finance-billing-service \
+  finance-billing-service=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-finance-billing-service:v1.1.0 \
+  -n pharma-erp
+```
+
+Frontend:
+
+```bash
+kubectl set image deployment/frontend \
+  frontend=123456789012.dkr.ecr.us-east-1.amazonaws.com/pharma-erp-frontend:v1.1.0 \
+  -n pharma-erp
+```
+
+## Step 16 - Verify the Manual Rolling Update
+
+```bash
+kubectl rollout status deployment/auth-service -n pharma-erp
+kubectl rollout status deployment/employee-service -n pharma-erp
+kubectl rollout status deployment/medicine-catalog-service -n pharma-erp
+kubectl rollout status deployment/inventory-service -n pharma-erp
+kubectl rollout status deployment/procurement-service -n pharma-erp
+kubectl rollout status deployment/sales-distribution-service -n pharma-erp
+kubectl rollout status deployment/production-batch-service -n pharma-erp
+kubectl rollout status deployment/quality-control-service -n pharma-erp
+kubectl rollout status deployment/warehouse-logistics-service -n pharma-erp
+kubectl rollout status deployment/finance-billing-service -n pharma-erp
+kubectl rollout status deployment/frontend -n pharma-erp
+```
+
+## Step 17 - Manual Rollback Commands
+
+If a rollout fails, roll back the affected deployment only:
+
+```bash
+kubectl rollout undo deployment/auth-service -n pharma-erp
+kubectl rollout undo deployment/employee-service -n pharma-erp
+kubectl rollout undo deployment/medicine-catalog-service -n pharma-erp
+kubectl rollout undo deployment/inventory-service -n pharma-erp
+kubectl rollout undo deployment/procurement-service -n pharma-erp
+kubectl rollout undo deployment/sales-distribution-service -n pharma-erp
+kubectl rollout undo deployment/production-batch-service -n pharma-erp
+kubectl rollout undo deployment/quality-control-service -n pharma-erp
+kubectl rollout undo deployment/warehouse-logistics-service -n pharma-erp
+kubectl rollout undo deployment/finance-billing-service -n pharma-erp
+kubectl rollout undo deployment/frontend -n pharma-erp
+```
+
+## Useful kubectl Commands
+
+```bash
+kubectl get pods -n pharma-erp
+kubectl get svc -n pharma-erp
+kubectl describe deployment auth-service -n pharma-erp
+kubectl describe svc frontend -n pharma-erp
+kubectl describe ingress pharma-erp-ingress -n pharma-erp
+kubectl logs -f deployment/auth-service -n pharma-erp --tail=100
+kubectl logs -f deployment/frontend -n pharma-erp --tail=100
+kubectl exec -it deployment/auth-service -n pharma-erp -- sh
+kubectl scale deployment/inventory-service --replicas=3 -n pharma-erp
+kubectl rollout restart deployment/finance-billing-service -n pharma-erp
+```
+
+## Troubleshooting
+
+| Issue | Debug Command |
+| --- | --- |
+| Pod in `CrashLoopBackOff` | `kubectl logs <pod-name> -n pharma-erp --previous` |
+| Pod in `Pending` | `kubectl describe pod <pod-name> -n pharma-erp` |
+| Secret not found | `kubectl get secret pharma-erp-app-secrets -n pharma-erp` |
+| ConfigMap not found | `kubectl get configmap pharma-erp-service-config -n pharma-erp` |
+| Image pull failure | `kubectl describe pod <pod-name> -n pharma-erp` |
+| Service unreachable | `kubectl describe svc <service-name> -n pharma-erp` |
+| Ingress has no address | `kubectl describe ingress <ingress-name> -n pharma-erp` |
+| Backend health check failing | `kubectl logs -f deployment/<service-name> -n pharma-erp --tail=100` |
+| Frontend loads but modules fail | verify `AUTH_SERVICE_URL` style variables and check backend pod logs |
+
+## Recommended Production Notes
+
+- Use MongoDB Atlas or another managed MongoDB service instead of running MongoDB inside the cluster for production.
+- Store secrets in AWS Secrets Manager, External Secrets Operator, or Sealed Secrets if your platform supports it.
+- Keep Kubernetes manifests in a separate infra or GitOps repository.
+- Promote images with immutable tags such as `v1.0.0`, `v1.0.1`, `v1.1.0`.
+- Avoid using `latest` in any environment beyond local testing.
