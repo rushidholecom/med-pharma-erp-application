@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 
 @RestController
-@RequestMapping("/api/v1/system")
+@RequestMapping("/system")
 @CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class ServiceNetworkController {
 
@@ -35,9 +35,9 @@ public class ServiceNetworkController {
 
     @GetMapping("/peers")
     public ServiceNetworkView peers() {
-        List<PeerConnectionStatus> peers = peerServicesProperties.getPeers().entrySet().stream()
+        List<PeerConnectionStatus> peers = peerServicesProperties.entrySet().stream()
                 .filter(entry -> !entry.getKey().equals(currentServiceName))
-                .map(entry -> probePeer(entry.getKey(), entry.getValue()))
+                .map(entry -> probePeer(entry.getKey(), entry.getValue().getBaseUrl()))
                 .toList();
 
         long reachablePeers = peers.stream()
@@ -54,39 +54,48 @@ public class ServiceNetworkController {
     }
 
     private PeerConnectionStatus probePeer(String serviceName, String baseUrl) {
+        String normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> healthResponse = restClient.get()
-                    .uri(baseUrl + "/actuator/health")
+                    .uri(normalizedBaseUrl + "/actuator/health")
                     .retrieve()
                     .body(Map.class);
 
             String status = String.valueOf(healthResponse.getOrDefault("status", "UNKNOWN"));
-            return new PeerConnectionStatus(serviceName, baseUrl, "UP".equalsIgnoreCase(status), status, null);
+            return new PeerConnectionStatus(serviceName, normalizedBaseUrl, "UP".equalsIgnoreCase(status), status, null);
         } catch (Exception exception) {
             return new PeerConnectionStatus(
                     serviceName,
-                    baseUrl,
+                    normalizedBaseUrl,
                     false,
                     "DOWN",
                     exception.getClass().getSimpleName() + ": " + exception.getMessage()
             );
         }
     }
+
+    private String normalizeBaseUrl(String baseUrl) {
+        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    }
 }
 
 @Component
-@ConfigurationProperties(prefix = "app.services")
-class PeerServicesProperties {
+@ConfigurationProperties(prefix = "services")
+class PeerServicesProperties extends LinkedHashMap<String, ServiceEndpointProperties> {
+}
 
-    private Map<String, String> peers = new LinkedHashMap<>();
+class ServiceEndpointProperties {
 
-    public Map<String, String> getPeers() {
-        return peers;
+    private String baseUrl;
+
+    public String getBaseUrl() {
+        return baseUrl;
     }
 
-    public void setPeers(Map<String, String> peers) {
-        this.peers = peers;
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
     }
 }
 
@@ -107,4 +116,3 @@ record PeerConnectionStatus(
         String error
 ) {
 }
-

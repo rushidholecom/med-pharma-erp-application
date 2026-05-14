@@ -1,5 +1,7 @@
 server:
   port: 8089
+  servlet:
+    context-path: /api/v1
 
 spring:
   application:
@@ -7,27 +9,56 @@ spring:
   data:
     mongodb:
       uri: ${WAREHOUSE_MONGODB_URI:${MONGODB_URI:mongodb://localhost:27017/pharma_warehouse_db}}
+      database: ${WAREHOUSE_MONGODB_DATABASE:pharma_warehouse_db}
       auto-index-creation: true
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
 
-app:
-  services:
-    peers:
-      auth-service: ${AUTH_SERVICE_URL:http://localhost:8081}
-      employee-service: ${EMPLOYEE_SERVICE_URL:http://localhost:8082}
-      medicine-catalog-service: ${CATALOG_SERVICE_URL:http://localhost:8083}
-      inventory-service: ${INVENTORY_SERVICE_URL:http://localhost:8084}
-      procurement-service: ${PROCUREMENT_SERVICE_URL:http://localhost:8085}
-      sales-distribution-service: ${SALES_SERVICE_URL:http://localhost:8086}
-      production-batch-service: ${PRODUCTION_SERVICE_URL:http://localhost:8087}
-      quality-control-service: ${QUALITY_SERVICE_URL:http://localhost:8088}
-      warehouse-logistics-service: ${WAREHOUSE_SERVICE_URL:http://localhost:8089}
-      finance-billing-service: ${FINANCE_SERVICE_URL:http://localhost:8090}
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.pharma.erp.warehouse: INFO
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+
+services:
+  auth-service:
+    base-url: ${AUTH_SERVICE_URL:http://localhost:8081/api/v1}
+  employee-service:
+    base-url: ${EMPLOYEE_SERVICE_URL:http://localhost:8082/api/v1}
+  medicine-catalog-service:
+    base-url: ${CATALOG_SERVICE_URL:http://localhost:8083/api/v1}
+  inventory-service:
+    base-url: ${INVENTORY_SERVICE_URL:http://localhost:8084/api/v1}
+  procurement-service:
+    base-url: ${PROCUREMENT_SERVICE_URL:http://localhost:8085/api/v1}
+  sales-distribution-service:
+    base-url: ${SALES_SERVICE_URL:http://localhost:8086/api/v1}
+  production-batch-service:
+    base-url: ${PRODUCTION_SERVICE_URL:http://localhost:8087/api/v1}
+  quality-control-service:
+    base-url: ${QUALITY_SERVICE_URL:http://localhost:8088/api/v1}
+  warehouse-logistics-service:
+    base-url: ${WAREHOUSE_SERVICE_URL:http://localhost:8089/api/v1}
+  finance-billing-service:
+    base-url: ${FINANCE_SERVICE_URL:http://localhost:8090/api/v1}

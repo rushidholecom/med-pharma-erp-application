@@ -131,7 +131,7 @@ Each service exposes:
 
 - `GET /api/v1/<module>/summary`
 - `GET /api/v1/system/peers`
-- `GET /actuator/health`
+- `GET /api/v1/actuator/health`
 
 `/api/v1/system/peers` lets any service check the health of the other configured services, which is useful for validating service-to-service communication during development.
 

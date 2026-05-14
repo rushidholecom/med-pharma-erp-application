@@ -56,7 +56,7 @@ Each service now includes a development-friendly endpoint:
 
 - `GET /api/v1/system/peers`
 
-That endpoint reads peer URLs from `app.services.peers` in `application.yml` and calls each peer's `GET /actuator/health` endpoint. It is a simple service mesh check that confirms whether the other services are reachable.
+That endpoint reads peer URLs from `services.<service-name>.base-url` in `application.yml` and calls each peer's `GET /api/v1/actuator/health` endpoint. It is a simple service mesh check that confirms whether the other services are reachable.
 
 ## API Response Contract
 

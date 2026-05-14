@@ -51,9 +51,9 @@ curl http://localhost:3000
 Check a few service health endpoints:
 
 ```bash
-curl http://localhost:8081/actuator/health
-curl http://localhost:8084/actuator/health
-curl http://localhost:8090/actuator/health
+curl http://localhost:8081/api/v1/actuator/health
+curl http://localhost:8084/api/v1/actuator/health
+curl http://localhost:8090/api/v1/actuator/health
 ```
 
 Open the application in your browser:
@@ -124,5 +124,5 @@ docker stats
 | Container exits immediately | `docker compose logs <service-name>` |
 | Port already in use | `docker compose ps` and check local processes on `3000`, `27017`, `8081-8090` |
 | MongoDB not reachable | `docker compose logs mongodb` |
-| Frontend loads but API cards fail | `curl http://localhost:8081/actuator/health` and `docker compose logs frontend` |
+| Frontend loads but API cards fail | `curl http://localhost:8081/api/v1/actuator/health` and `docker compose logs frontend` |
 | Fresh reset needed | `docker compose down -v && docker compose up -d --build` |

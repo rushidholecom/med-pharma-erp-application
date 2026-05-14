@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/employees")
+@RequestMapping("/employees")
 @CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class EmployeeSummaryController {
 
@@ -42,4 +42,3 @@ public class EmployeeSummaryController {
         );
     }
 }
-

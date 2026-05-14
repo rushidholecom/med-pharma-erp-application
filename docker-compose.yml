@@ -1,16 +1,16 @@
 name: pharma-erp-platform
 
 x-peer-service-urls: &peer-service-urls
-  AUTH_SERVICE_URL: http://auth-service:8081
-  EMPLOYEE_SERVICE_URL: http://employee-service:8082
-  CATALOG_SERVICE_URL: http://medicine-catalog-service:8083
-  INVENTORY_SERVICE_URL: http://inventory-service:8084
-  PROCUREMENT_SERVICE_URL: http://procurement-service:8085
-  SALES_SERVICE_URL: http://sales-distribution-service:8086
-  PRODUCTION_SERVICE_URL: http://production-batch-service:8087
-  QUALITY_SERVICE_URL: http://quality-control-service:8088
-  WAREHOUSE_SERVICE_URL: http://warehouse-logistics-service:8089
-  FINANCE_SERVICE_URL: http://finance-billing-service:8090
+  AUTH_SERVICE_URL: http://auth-service:8081/api/v1
+  EMPLOYEE_SERVICE_URL: http://employee-service:8082/api/v1
+  CATALOG_SERVICE_URL: http://medicine-catalog-service:8083/api/v1
+  INVENTORY_SERVICE_URL: http://inventory-service:8084/api/v1
+  PROCUREMENT_SERVICE_URL: http://procurement-service:8085/api/v1
+  SALES_SERVICE_URL: http://sales-distribution-service:8086/api/v1
+  PRODUCTION_SERVICE_URL: http://production-batch-service:8087/api/v1
+  QUALITY_SERVICE_URL: http://quality-control-service:8088/api/v1
+  WAREHOUSE_SERVICE_URL: http://warehouse-logistics-service:8089/api/v1
+  FINANCE_SERVICE_URL: http://finance-billing-service:8090/api/v1
 
 services:
   mongodb:
@@ -228,4 +228,3 @@ services:
 
 volumes:
   mongodb_data:
-
