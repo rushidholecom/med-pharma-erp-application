@@ -1,9 +1,10 @@
 .git
 .idea
 .vscode
+.env
+.env.example
 **/target
 **/node_modules
 **/dist
 **/*.log
 docs
-

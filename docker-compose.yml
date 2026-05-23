@@ -1,4 +1,4 @@
-name: pharma-erp-platform
+name: ${COMPOSE_PROJECT_NAME:-pharma-erp-platform}
 
 x-peer-service-urls: &peer-service-urls
   AUTH_SERVICE_URL: http://auth-service:8081/api/v1
@@ -12,204 +12,173 @@ x-peer-service-urls: &peer-service-urls
   WAREHOUSE_SERVICE_URL: http://warehouse-logistics-service:8089/api/v1
   FINANCE_SERVICE_URL: http://finance-billing-service:8090/api/v1
 
+x-backend-service: &backend-service
+  restart: unless-stopped
+  env_file:
+    - .env
+
+x-frontend-build-args: &frontend-build-args
+  VITE_AUTH_SERVICE_URL: ${VITE_AUTH_SERVICE_URL:-/proxy/auth-service}
+  VITE_EMPLOYEE_SERVICE_URL: ${VITE_EMPLOYEE_SERVICE_URL:-/proxy/employee-service}
+  VITE_CATALOG_SERVICE_URL: ${VITE_CATALOG_SERVICE_URL:-/proxy/medicine-catalog-service}
+  VITE_INVENTORY_SERVICE_URL: ${VITE_INVENTORY_SERVICE_URL:-/proxy/inventory-service}
+  VITE_PROCUREMENT_SERVICE_URL: ${VITE_PROCUREMENT_SERVICE_URL:-/proxy/procurement-service}
+  VITE_SALES_SERVICE_URL: ${VITE_SALES_SERVICE_URL:-/proxy/sales-distribution-service}
+  VITE_PRODUCTION_SERVICE_URL: ${VITE_PRODUCTION_SERVICE_URL:-/proxy/production-batch-service}
+  VITE_QUALITY_SERVICE_URL: ${VITE_QUALITY_SERVICE_URL:-/proxy/quality-control-service}
+  VITE_WAREHOUSE_SERVICE_URL: ${VITE_WAREHOUSE_SERVICE_URL:-/proxy/warehouse-logistics-service}
+  VITE_FINANCE_SERVICE_URL: ${VITE_FINANCE_SERVICE_URL:-/proxy/finance-billing-service}
+
 services:
   mongodb:
+    profiles:
+      - local-db
     image: mongo:7.0
-    container_name: mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "${MONGO_HOST_PORT:-27017}:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: pharmaadmin
-      MONGO_INITDB_ROOT_PASSWORD: change-me-in-prod
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-pharmaadmin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-me}
     volumes:
       - mongodb_data:/data/db
 
   auth-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: auth-service
     image: pharma-erp-auth-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8081:8081"
+      - "${AUTH_SERVICE_HOST_PORT:-8081}:8081"
     environment:
       <<: *peer-service-urls
-      AUTH_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_auth_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   employee-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: employee-service
     image: pharma-erp-employee-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8082:8082"
+      - "${EMPLOYEE_SERVICE_HOST_PORT:-8082}:8082"
     environment:
       <<: *peer-service-urls
-      EMPLOYEE_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_employee_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   medicine-catalog-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: medicine-catalog-service
     image: pharma-erp-medicine-catalog-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8083:8083"
+      - "${MEDICINE_CATALOG_SERVICE_HOST_PORT:-8083}:8083"
     environment:
       <<: *peer-service-urls
-      CATALOG_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_catalog_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   inventory-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: inventory-service
     image: pharma-erp-inventory-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8084:8084"
+      - "${INVENTORY_SERVICE_HOST_PORT:-8084}:8084"
     environment:
       <<: *peer-service-urls
-      INVENTORY_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_inventory_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   procurement-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: procurement-service
     image: pharma-erp-procurement-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8085:8085"
+      - "${PROCUREMENT_SERVICE_HOST_PORT:-8085}:8085"
     environment:
       <<: *peer-service-urls
-      PROCUREMENT_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_procurement_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   sales-distribution-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: sales-distribution-service
     image: pharma-erp-sales-distribution-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8086:8086"
+      - "${SALES_DISTRIBUTION_SERVICE_HOST_PORT:-8086}:8086"
     environment:
       <<: *peer-service-urls
-      SALES_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_sales_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   production-batch-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: production-batch-service
     image: pharma-erp-production-batch-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8087:8087"
+      - "${PRODUCTION_BATCH_SERVICE_HOST_PORT:-8087}:8087"
     environment:
       <<: *peer-service-urls
-      PRODUCTION_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_production_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   quality-control-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: quality-control-service
     image: pharma-erp-quality-control-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8088:8088"
+      - "${QUALITY_CONTROL_SERVICE_HOST_PORT:-8088}:8088"
     environment:
       <<: *peer-service-urls
-      QUALITY_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_quality_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   warehouse-logistics-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: warehouse-logistics-service
     image: pharma-erp-warehouse-logistics-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8089:8089"
+      - "${WAREHOUSE_LOGISTICS_SERVICE_HOST_PORT:-8089}:8089"
     environment:
       <<: *peer-service-urls
-      WAREHOUSE_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_warehouse_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   finance-billing-service:
+    <<: *backend-service
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
         SERVICE_DIR: finance-billing-service
     image: pharma-erp-finance-billing-service:local
-    restart: unless-stopped
-    depends_on:
-      - mongodb
     ports:
-      - "8090:8090"
+      - "${FINANCE_BILLING_SERVICE_HOST_PORT:-8090}:8090"
     environment:
       <<: *peer-service-urls
-      FINANCE_MONGODB_URI: mongodb://pharmaadmin:change-me-in-prod@mongodb:27017/pharma_finance_db?authSource=admin
-      JAVA_OPTS: -Xms128m -Xmx384m
 
   frontend:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
       args:
-        VITE_AUTH_SERVICE_URL: /proxy/auth-service
-        VITE_EMPLOYEE_SERVICE_URL: /proxy/employee-service
-        VITE_CATALOG_SERVICE_URL: /proxy/medicine-catalog-service
-        VITE_INVENTORY_SERVICE_URL: /proxy/inventory-service
-        VITE_PROCUREMENT_SERVICE_URL: /proxy/procurement-service
-        VITE_SALES_SERVICE_URL: /proxy/sales-distribution-service
-        VITE_PRODUCTION_SERVICE_URL: /proxy/production-batch-service
-        VITE_QUALITY_SERVICE_URL: /proxy/quality-control-service
-        VITE_WAREHOUSE_SERVICE_URL: /proxy/warehouse-logistics-service
-        VITE_FINANCE_SERVICE_URL: /proxy/finance-billing-service
+        <<: *frontend-build-args
     image: pharma-erp-frontend:local
     restart: unless-stopped
     depends_on:
@@ -224,7 +193,7 @@ services:
       - warehouse-logistics-service
       - finance-billing-service
     ports:
-      - "3000:80"
+      - "${FRONTEND_HOST_PORT:-3000}:80"
 
 volumes:
   mongodb_data:

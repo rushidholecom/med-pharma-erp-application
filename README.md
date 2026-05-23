@@ -26,6 +26,31 @@ This repository contains a professional starter ERP web application for a pharma
 
 The frontend lives in `frontend/` and is built with React + TypeScript + Vite. It calls all 10 services directly through a central API configuration layer.
 
+## Docker Quick Start
+
+The repository now includes an env-driven Docker deployment flow so you can keep environment-specific values in one place.
+
+1. Review or edit the root `.env` file.
+2. Start the stack:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action up
+```
+
+3. Check status:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action ps
+```
+
+If you need a fresh template, copy `.env.example` to `.env` or run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action init
+```
+
+See [docs/docker-deployment-guide](/c:/Users/rushi/application-10/docs/docker-deployment-guide) for the full deployment workflow, including local MongoDB and Atlas options.
+
 ## Suggested Local Requirements
 
 - Java 17+

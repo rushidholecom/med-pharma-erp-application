@@ -1,128 +1,156 @@
 ## Docker Deployment Guide
 
-### Prerequisites
+### What Changed
 
-- Docker 24+
-- Docker Compose plugin
-- 8 GB RAM recommended for running MongoDB, 10 Java services, and the frontend together
-- Local ports `3000`, `27017`, and `8081` through `8090` available
+The Docker workflow is now `.env`-driven:
 
-### Step 1 - Review Docker Assets
+- all manual deployment values live in the root `.env`
+- `.env.example` documents every supported variable
+- `scripts/deploy.ps1` can initialize, validate, and run the stack
+- MongoDB can run locally with Docker or be switched to Atlas by editing `.env`
 
-This repository already includes the Docker deployment files:
+### Files You Will Use
 
+- `docker-compose.yml`
+- `.env`
+- `.env.example`
 - `docker/backend.Dockerfile`
 - `docker/frontend.Dockerfile`
 - `docker/nginx.conf`
-- `docker-compose.yml`
+- `scripts/deploy.ps1`
 
-### Step 2 - Build the Full Stack
+### Quick Start
 
-```bash
-docker compose build
+1. Initialize the environment file if needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action init
 ```
 
-If you want a clean rebuild without old layers:
+2. Edit `.env` and review at least:
 
-```bash
-docker compose build --no-cache
+- `JWT_SECRET`
+- `CORS_ALLOWED_ORIGINS`
+- `MONGODB_URI`
+- host ports such as `FRONTEND_HOST_PORT`
+
+3. Start the full stack:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action up
 ```
 
-### Step 3 - Start All Containers
+4. Check running containers:
 
-```bash
-docker compose up -d
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action ps
 ```
 
-Verify container status:
+### Local MongoDB Mode
 
-```bash
-docker compose ps
-```
-
-### Step 4 - Verify the Deployment
-
-Check the frontend:
-
-```bash
-curl http://localhost:3000
-```
-
-Check a few service health endpoints:
-
-```bash
-curl http://localhost:8081/api/v1/actuator/health
-curl http://localhost:8084/api/v1/actuator/health
-curl http://localhost:8090/api/v1/actuator/health
-```
-
-Open the application in your browser:
+The default `.env` enables:
 
 ```text
-http://localhost:3000
+COMPOSE_PROFILES=local-db
 ```
 
-### Step 5 - View Logs
+That starts the bundled `mongodb` container and uses:
 
-```bash
-docker compose logs -f frontend
-docker compose logs -f auth-service
-docker compose logs -f inventory-service
-docker compose logs -f mongodb
+```text
+MONGODB_URI=mongodb://pharmaadmin:change-me@mongodb:27017/?authSource=admin
 ```
 
-### Step 6 - Stop, Restart, or Rebuild
+Use this mode when you want the fewest setup steps on a developer machine or a quick single-host demo deployment.
 
-Stop the stack:
+### MongoDB Atlas or External MongoDB Mode
 
-```bash
-docker compose down
+If you already have MongoDB Atlas or another managed MongoDB instance:
+
+1. Open `.env`
+2. Clear `COMPOSE_PROFILES`
+3. Replace `MONGODB_URI` with your external connection string
+4. Keep or adjust the per-service `*_MONGODB_DATABASE` values
+
+Example:
+
+```text
+COMPOSE_PROFILES=
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority&appName=PharmaERP
 ```
 
-Stop and remove MongoDB data volume too:
+If one service must use a different cluster, uncomment only that service's `*_MONGODB_URI` variable in `.env`.
 
-```bash
-docker compose down -v
+### Useful Commands
+
+Start everything:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action up
 ```
 
-Rebuild one service and restart it:
+Stop everything:
 
-```bash
-docker compose build auth-service
-docker compose up -d auth-service
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action down
 ```
 
-Restart the whole stack:
+View logs:
 
-```bash
-docker compose restart
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action logs
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action logs -Service frontend
 ```
 
-### Useful Docker Commands
+Restart one service:
 
-```bash
-# Container status
-docker compose ps
-
-# Follow all logs
-docker compose logs -f
-
-# Follow one service log
-docker compose logs -f finance-billing-service
-
-# Open shell inside a running container
-docker compose exec auth-service sh
-
-# Resource usage
-docker stats
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action restart -Service auth-service
 ```
 
-### Docker Troubleshooting
+Render the final Compose configuration:
 
-| Issue | Debug Command |
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action config
+```
+
+### Manual Docker Compose Commands
+
+If you prefer raw Docker commands instead of the helper script:
+
+```powershell
+docker compose --env-file .env up -d --build
+docker compose --env-file .env ps
+docker compose --env-file .env logs -f
+docker compose --env-file .env down
+```
+
+### Application Endpoints
+
+- Frontend: `http://localhost:<FRONTEND_HOST_PORT>`
+- Auth health: `http://localhost:<AUTH_SERVICE_HOST_PORT>/api/v1/actuator/health`
+- Inventory health: `http://localhost:<INVENTORY_SERVICE_HOST_PORT>/api/v1/actuator/health`
+- Finance health: `http://localhost:<FINANCE_BILLING_SERVICE_HOST_PORT>/api/v1/actuator/health`
+
+With the default `.env`, those resolve to:
+
+- `http://localhost:3000`
+- `http://localhost:8081/api/v1/actuator/health`
+- `http://localhost:8084/api/v1/actuator/health`
+- `http://localhost:8090/api/v1/actuator/health`
+
+### Security Notes
+
+- `.env` is ignored by Git and should stay local to each environment
+- `.env` is also excluded from the Docker build context
+- do not commit Atlas usernames, passwords, or production JWT secrets
+- rotate `JWT_SECRET` before any shared or production deployment
+
+### Troubleshooting
+
+| Issue | What To Check |
 | --- | --- |
-| Container exits immediately | `docker compose logs <service-name>` |
-| Port already in use | `docker compose ps` and check local processes on `3000`, `27017`, `8081-8090` |
-| MongoDB not reachable | `docker compose logs mongodb` |
-| Frontend loads but API cards fail | `curl http://localhost:8081/api/v1/actuator/health` and `docker compose logs frontend` |
-| Fresh reset needed | `docker compose down -v && docker compose up -d --build` |
+| Backend container exits on startup | `powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action logs -Service <service-name>` |
+| Frontend loads but cards fail | verify `VITE_*` values in `.env` and check backend health endpoints |
+| Mongo connection errors | validate `MONGODB_URI`, `COMPOSE_PROFILES`, and optional `*_MONGODB_URI` overrides |
+| Port binding conflict | change the relevant `*_HOST_PORT` value in `.env` |
+| Compose file looks wrong after edits | run `powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -Action config` |
